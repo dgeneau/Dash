@@ -304,7 +304,7 @@ splits_card = dbc.Card(
         dash_table.DataTable(
             id="breakdown_table",
             # data + columns come from the callback
-            style_table={"overflowX": "auto", "minWidth": "100%"},
+            style_table={"overflowX": "auto", "minWidth": "90%"},
             style_header={
                 "backgroundColor": "#6c757d",  # Bootstrap gray-700
                 "color": "white",
@@ -321,7 +321,7 @@ splits_card = dbc.Card(
                 "border": "1px solid #e9ecef",
             },
             style_cell_conditional=[
-                {"if": {"column_id": "Country, Lane"}, "width": "220px", "minWidth": "220px"},
+                {"if": {"column_id": "Country, Lane"}, "width": "120px", "minWidth": "220px"},
                 {"if": {"column_id": "Rank"},          "width": "72px",  "textAlign": "center"},
                 # distance columns: keep readable width
                 *[{"if": {"column_id": d}, "width": "132px"} for d in DISTANCES],
@@ -428,7 +428,15 @@ def on_selection(event, races, lane_flags):
         empty = go.Figure()
         return empty, empty, empty, [], [], [], [], "", gps_msg
 
-    tbl_cols    = [{"name": c, "id": c} for c in out["table_df"].columns]
+    #tbl_cols    = [{"name": c, "id": c} for c in out["table_df"].columns]
+    compact_df = make_compact_breakdown(out["table_df"])
+    tbl_cols = (
+        [{"name": "Country, Lane", "id": "Country, Lane"},
+         {"name": "Rank", "id": "Rank"}] +
+        [{"name": d, "id": d, "presentation": "markdown"} for d in DISTANCES]
+    )
+    table_df = compact_df.to_dict("records")
+
     timing_cols = [{"name": c, "id": c} for c in out["timing_df"].columns]
     show_timing = ("lane_det" in (lane_flags or []))
     timing_data = out["timing_df"].to_dict("records") if show_timing else []
@@ -438,7 +446,7 @@ def on_selection(event, races, lane_flags):
 
     return (
         out["vel_fig"], out["stroke_fig"], out["splits_plot"],
-        out["table_df"].to_dict("records"), tbl_cols,
+        table_df, tbl_cols,
         timing_data, timing_cols,
         nav_text, gps_msg
     )
