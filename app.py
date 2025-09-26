@@ -43,6 +43,24 @@ except Exception:
     Footer = None
 
 # ── Helpers (ported) ─────────────────────────────────────────────────────────
+# Compact breakdown: "Split\nSR {stroke}\n{speed} m/s" per 250m column
+DISTANCES = ["250m","500m","750m","1000m","1250m","1500m","1750m","2000m"]
+
+def make_compact_breakdown(table_df: pd.DataFrame) -> pd.DataFrame:
+    if table_df.empty:
+        return table_df
+    out = table_df[["Country, Lane", "Rank"]].copy()
+    for d in DISTANCES:
+        split_col  = f"{d} Split"
+        stroke_col = f"{d} Stroke"
+        speed_col  = f"{d} Speed"
+        out[d] = table_df.apply(
+            lambda r: f"{r[split_col]}\nSR {r[stroke_col]}\n{r[speed_col]} m/s",
+            axis=1
+        )
+    return out
+
+
 def convert_seconds_to_time(seconds: float) -> str:
     m = int(seconds // 60); s = int(seconds % 60); ms = int((seconds - int(seconds)) * 1000)
     return f"{m:02d}:{s:02d}.{ms:03d}"
@@ -213,7 +231,6 @@ def build_outputs(df: pd.DataFrame):
     transposed.columns = rename_duplicate_columns(transposed.columns)
     transposed_splits = transposed[transposed.index.str.contains('Split')]
 
-    print(transposed_splits)
 
 
     splits_plot = go.Figure()
@@ -221,20 +238,15 @@ def build_outputs(df: pd.DataFrame):
     for i, col in enumerate(transposed_splits.columns):
         line = dict(color="red", width=4, dash="dash") if "CAN" in col else dict(color=palette[i % len(palette)])
         print(transposed_splits[col])
-        #try:
-            #y_secs = [time_to_seconds(str(s)) for s in transposed[col].tolist()]
-        splits_plot.add_trace(go.Scatter(x=x_vals, y=list(pd.to_datetime(transposed_splits[col])), 
-                                            mode="lines+markers", 
-                                            line=line, 
-                                            name=col,
-                                            hovertemplate="%{y:.2f}s at %{x}m<extra></extra>"))
-        '''
-        splits_plot.add_trace(go.Scatter(x=x_vals, y=y_secs, mode="lines", line=line, name=col,
-                                            hovertemplate="%{y:.2f}s at %{x}m<extra></extra>"))
-        '''
-        #except Exception:
-            #print('no work')
-            #pass
+        try:
+           
+            splits_plot.add_trace(go.Scatter(x=x_vals, y=list(pd.to_datetime(transposed_splits[col])), 
+                                                mode="lines+markers", 
+                                                line=line, 
+                                                name=col,
+                                                hovertemplate="%{y:.2f}s at %{x}m<extra></extra>"))
+        except Exception:
+                pass
     splits_plot.update_layout(title="Race Split Vs. Distance", xaxis_title="Distance (m)",
                               yaxis=dict(title="Time for 500m (s)", autorange="reversed"),
                               margin=dict(l=40,r=20,t=60,b=40),)
@@ -291,16 +303,44 @@ splits_card = dbc.Card(
         html.H5("Race Split Breakdown", className="card-title"),
         dash_table.DataTable(
             id="breakdown_table",
-            style_table={"overflowX": "auto"},
-            style_cell={"fontFamily": "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-                        "fontSize": 14, "whiteSpace": "normal", "height": "auto"},
+            # data + columns come from the callback
+            style_table={"overflowX": "auto", "minWidth": "100%"},
+            style_header={
+                "backgroundColor": "#6c757d",  # Bootstrap gray-700
+                "color": "white",
+                "fontWeight": "600",
+                "border": "1px solid #6c757d",
+            },
+            style_cell={
+                "fontFamily": "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+                "fontSize": 14,
+                "whiteSpace": "pre-line",     # <-- render \n as new lines
+                "height": "auto",
+                "lineHeight": "1.25rem",
+                "padding": "8px 10px",
+                "border": "1px solid #e9ecef",
+            },
+            style_cell_conditional=[
+                {"if": {"column_id": "Country, Lane"}, "width": "220px", "minWidth": "220px"},
+                {"if": {"column_id": "Rank"},          "width": "72px",  "textAlign": "center"},
+                # distance columns: keep readable width
+                *[{"if": {"column_id": d}, "width": "132px"} for d in DISTANCES],
+            ],
+            style_data_conditional=[
+                # zebra striping
+                {"if": {"row_index": "odd"}, "backgroundColor": "#f8f9fa"},
+                # highlight CAN row like your Plotly table
+                {"if": {"filter_query": '{Country, Lane} contains "CAN"'}, "backgroundColor": "#f3d1db"},
+            ],
+            fixed_rows={"headers": True},
             sort_action="native",
-            page_size=20
+            page_size=20,
+            # allow simple markdown (not required for \n line breaks)
+            markdown_options={"html": False},
         ),
     ]),
     className="mb-4 shadow-sm"
 )
-
 timing_card = dbc.Card(
     dbc.CardBody([
         html.H5("Timing Summary", className="card-title"),
